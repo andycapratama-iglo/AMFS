@@ -1,42 +1,59 @@
 """
-TC-PIM-007 | PIM / Employee List / Search
-Title: Pencarian dengan Field Employee Name Kosong (Search Semua Data)
-       (Search with Empty Employee Name Field - Search All Data)
-Pre-conditions: User is on Employee List; filters are default/empty.
-Priority: P3 - Medium
+TC-PIM-007 | PIM / Employee List / Delete
+Title: Delete Employee (Happy Path)
+Pre-conditions: User is on Employee List; the target employee 'Carter' exists
+                 (name noted before deleting).
+Priority: P1 - Critical
 
 Steps:
-    1. Ensure Employee Name is empty
-    2. Click the Search button without filling any filter
+    1. Search for the employee 'Carter' to identify the row to delete
+    2. Click the delete icon on that row
+    3. Confirm the 'Yes, Delete' dialog
 
 Expected Result:
-    Table shows all active employee data (same as the initial state);
-    no validation error occurs.
+    Success notification appears; the employee no longer appears in the
+    table; Records Found decreases by 1.
 """
 import pytest
 
+# Fixed target employee so this test always deletes the same, known record -
+# using row 0 of the unfiltered list would delete whatever employee happens
+# to sort first, which varies with seed data and test order.
+EMPLOYEE_NAME = "Bahlil"
 
-@pytest.mark.p3
+
+@pytest.mark.p1
+@pytest.mark.smoke
 class TestTC_PIM_007:
-    def test_search_with_all_filters_empty_returns_all_data(self, pim_page):
-        initial_records_found = pim_page.get_records_found_count()
+    def test_delete_employee_happy_path(self, pim_page):
+        pim_page.search_by_employee_name(EMPLOYEE_NAME, require_hint=True)
+        _, row_count_before = pim_page.wait_for_results_to_settle()
 
-        assert pim_page.employee_name_input.input_value() == "", (
-            "Precondition failed: Employee Name is not empty"
+        if row_count_before == 0:
+            pytest.skip(
+                f"'{EMPLOYEE_NAME}' not found - likely already deleted by an "
+                "earlier test in this run, or not present in seed data."
+            )
+
+        records_found_before = pim_page.get_records_found_count()
+        deleted_employee_name = pim_page.get_employee_name_in_row(0)
+
+        pim_page.click_delete_in_row(0)
+        pim_page.confirm_delete()
+
+        toast_text = pim_page.get_toast_text()
+        assert "success" in toast_text.lower(), (
+            f"Expected a success notification, got: '{toast_text}'"
         )
-        pim_page.click_search()
 
-        records_found_after_search = pim_page.get_records_found_count()
-        assert records_found_after_search == initial_records_found, (
-            "Records Found changed after searching with empty filters: "
-            f"{initial_records_found} -> {records_found_after_search}"
+        records_found_after = pim_page.get_records_found_count()
+        assert records_found_after == records_found_before - 1, (
+            f"Records Found did not decrease by 1: {records_found_before} -> "
+            f"{records_found_after}"
         )
 
-    def test_no_validation_error_shown(self, pim_page):
-        pim_page.click_search()
-        required_text_visible = pim_page.page.locator(
-            "span.oxd-input-field-error-message"
-        ).count()
-        assert required_text_visible == 0, (
-            "Unexpected validation error shown for an empty-filter search"
+        remaining_names = " ".join(pim_page.get_all_employee_names())
+        deleted_name_fragment = deleted_employee_name.strip().split("\n")[0]
+        assert deleted_name_fragment not in remaining_names, (
+            f"Deleted employee '{deleted_name_fragment}' still appears in the table"
         )

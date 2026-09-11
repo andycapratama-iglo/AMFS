@@ -1,44 +1,46 @@
 """
 TC-PIM-005 | PIM / Employee List / Search
-Title: Pencarian Employee dengan Nama Partial/Sebagian
-       (Search Employee with a Partial Name)
+Title: Pencarian Employee dengan Nama Tidak Terdaftar
+       (Search Employee with an Unregistered Name)
 Pre-conditions: User is on Employee List.
 Priority: P2 - High
 
 Steps:
-    1. Enter a partial name, e.g. 'Mich', into Employee Name
+    1. Enter an unregistered name, e.g. 'Zzxxqq123'
     2. Click the Search button
 
 Expected Result:
-    Table shows all employees whose name contains the substring 'Mich'
-    (partial match).
+    Table shows 'No Records Found'; '(0) Records Found' is displayed;
+    no error/crash occurs.
 """
 import pytest
 
-PARTIAL_NAME = "Tys"
+UNREGISTERED_NAME = "Zzxxqq1235452"
 
 
 @pytest.mark.p2
 class TestTC_PIM_005:
-    def test_search_with_partial_name_returns_substring_matches(self, pim_page):
-        pim_page.search_by_employee_name(PARTIAL_NAME)
+    def test_search_unregistered_name_shows_no_records(self, pim_page):
+        pim_page.search_by_employee_name(UNREGISTERED_NAME)
 
-        # Poll the results count itself to settle first (same race as
-        # TC-PIM-004: the counter and the row cards update on separate ticks).
-        _, row_count = pim_page.wait_for_results_to_settle()
-        if row_count == 0:
-            assert pim_page.is_no_records_found_visible(), (
-                "No rows returned but 'No Records Found' is not shown either"
-            )
-            return
+        assert pim_page.is_no_records_found_visible(), (
+            "'No Records Found' message was not shown for an unregistered name"
+        )
+        assert pim_page.get_records_found_count() == 0, (
+            "'(0) Records Found' was not reflected in the records count"
+        )
 
-        for i in range(row_count):
-            # Row wrapper elements are commonly reused in place across
-            # searches, so cell text can still be mid-update even after the
-            # row count has settled - wait for this specific row's text to
-            # actually reflect the expected match before asserting on it.
-            row_text = pim_page.wait_for_row_text_to_contain(i, PARTIAL_NAME)
-            assert PARTIAL_NAME.lower() in row_text.lower(), (
-                f"Row {i} does not contain the partial match '{PARTIAL_NAME}': "
-                f"'{row_text}'"
-            )
+    def test_no_error_or_crash_on_empty_result(self, pim_page, page):
+        console_errors = []
+        page.on(
+            "console",
+            lambda msg: console_errors.append(msg.text) if msg.type == "error" else None,
+        )
+
+        pim_page.search_by_employee_name(UNREGISTERED_NAME)
+        page.wait_for_timeout(300)
+
+        assert pim_page.employee_list_tab.is_visible(), (
+            "Page appears to have crashed / navigated away unexpectedly"
+        )
+        assert not console_errors, f"Unexpected console errors: {console_errors}"
